@@ -1,0 +1,97 @@
+var token = "<telebot token>";  
+var telegramUrl = "https://api.telegram.org/bot" + token;  
+var webAppUrl = "<google script id>";  
+
+//Use this method to specify a url and receive incoming updates via an outgoing webhook.
+function setWebhook() {
+  //url: HTTPS url to send updates to. Use an empty string to remove webhook integration
+  var url = telegramUrl + "/setWebhook?url=" + webAppUrl;
+
+  //Makes a request to fetch a URL.
+  var response = UrlFetchApp.fetch(url);
+}
+
+//Use this method to send text messages.
+function sendMessage(id, text, keyBoard) {
+  var data = {
+    method: "post",
+    payload: {
+      method: "sendMessage",
+      chat_id: String(id),
+      text: text,
+      parse_mode: "HTML",
+      reply_markup: JSON.stringify(keyBoard)
+    }
+  };
+  UrlFetchApp.fetch('https://api.telegram.org/bot' + token + '/', data);
+}
+
+
+//doPost: is designed to send unlimited amount of data along with the request to web resource.
+function doPost(e) {
+    
+  //parse user data
+  var contents = JSON.parse(e.postData.contents); 
+  
+  //set spreadsheet
+  var ssId = "<spreadsheet id>"; 
+  var sheet = SpreadsheetApp.openById(ssId).getSheetByName("Expenses"); 
+  
+  //if click in the inline_keyboard
+  if(contents.callback_query){
+    var id = contents.callback_query.from.id;
+    var data = contents.callback_query.data;
+    
+    //inline_keyboard
+    if(data == "budget") { 
+        var budget = sheet.getDataRange().getCell(1, 2).getValue();
+        return sendMessage(id, "Budget for this month is $" + budget);
+    } else if (data == "expenses") { 
+        var expenses = sheet.getDataRange().getCell(2, 2).getValue(); 
+        return sendMessage(id, "You have spend $" + expenses);
+    } else if (data == "savings") {  
+        var savings = sheet.getDataRange().getCell(3, 2).getValue();  
+        return sendMessage(id, "You have $" + savings + " left to spend");
+    }
+    
+    
+  } else if (contents.message) {
+    //Get username from message (Json)
+    var id = contents.message.from.id;
+    
+    //Look Json
+    var text = contents.message.text;
+    
+    //text.indexOf("-") = If text contain "-" 
+    //-1 == false
+    if(text.indexOf("-") !== -1){
+      var dateNow = new Date;
+      var reformatedDate = dateNow.getDate() + "/" + (dateNow.getMonth() + 1) + "/" + (dateNow.getYear() - 100);
+      var item = text.split("-");
+      
+      // [??/??/??  milk - 3]
+      sheet.appendRow([reformatedDate, item[0], item[1]]);
+      return sendMessage(id, "Added to your spreadsheet")
+    } else {
+        
+        var keyBoard = {
+          "inline_keyboard": [
+            [{
+              "text": "Budget",
+              "callback_data": "budget"
+            }],
+            [{
+              "text": "Expenses",
+              "callback_data": "expenses"
+            }],
+            [{
+              "text": "Amount left to spend",
+              "callback_data": "savings"
+            }]
+            ]
+        };
+      
+      return sendMessage(id, "Please send me your purchases using this format: [item] - [price]", keyBoard);
+    }
+  }
+}
